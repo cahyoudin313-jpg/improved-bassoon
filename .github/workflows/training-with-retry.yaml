@@ -1,0 +1,143 @@
+name: Training with Retry
+
+on:
+  workflow_dispatch:
+    inputs:
+      attempt:
+        type: string
+        description: 'The attempt number'
+        default: '1'
+      max_attempts:
+        type: number
+        description: 'The maximum number of attempts'
+        default: 5
+      max_seq_length:
+        type: string
+        required: false
+        description: 'The maximum sequence length'
+        default: '1024'
+      lora_rank:
+        type: string
+        required: false
+        description: 'The lora rank'
+        default: '64'
+      max_steps:
+        type: string
+        required: false
+        description: 'The maximum number of steps'
+        default: '100'
+      gpu_memory_utilization:
+        type: string
+        required: false
+        description: 'The GPU memory utilization'
+        default: '0.60'
+      learning_rate:
+        type: string
+        required: false
+        description: 'The learning rate'
+        default: '5e-6'
+      per_device_train_batch_size:
+        type: string
+        required: false
+        description: 'The per device training batch size'
+        default: '1'
+      hf_repo:
+        type: string
+        required: true
+        description: 'The Hugging Face repository to upload the model to'
+
+permissions:
+  actions: write
+  contents: read
+  checks: read
+
+jobs:
+  train-with-retry:
+    name: Qwen 2.5 3B - GRPO LoRA Training (unsloth)
+    runs-on:
+      - machine
+      - gpu=T4
+      - cpu=4
+      - ram=16
+      - tenancy=spot
+      - architecture=x64
+    timeout-minutes: 1200
+    env:
+      MAX_SEQ_LENGTH: ${{ inputs.max_seq_length }}
+      LORA_RANK: ${{ inputs.lora_rank }}
+      GPU_MEMORY_UTILIZATION: ${{ inputs.gpu_memory_utilization }}
+      MAX_STEPS: ${{ inputs.max_steps }}
+      LEARNING_RATE: ${{ inputs.learning_rate }}
+      PER_DEVICE_TRAIN_BATCH_SIZE: ${{ inputs.per_device_train_batch_size }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_ENABLE_HF_TRANSFER: 1
+      HF_REPO: ${{ inputs.hf_repo }}
+      HF_HUB_DOWNLOAD_TIMEOUT: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Print Attempt
+        if: inputs.attempt != ''
+        run: |
+          echo "Running training attempt ${{ inputs.attempt }} "
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Training
+        run: |
+          mkdir -p ./${{env.HF_REPO}}-checkpoints
+          python3 "qwen2_5_(3b)_grpo_checkpointing.py"
+
+  check-runner-failure:
+      name: Check for runner failure
+      needs: train-with-retry
+      if: ${{ failure() }}
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+
+        - name: Check for interruption
+          uses: ./.github/actions/check-runner-interruption
+          id: check_interruption
+          with:
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Calculate next attempt
+          if: ${{ steps.check_interruption.outputs.was_interrupted == 'true' }}
+          id: next-attempt
+          run: |
+            echo "Job was interrupted by spot instance shutdown"
+            NEXT_ATTEMPT=$((${CURRENT_ATTEMPT} + 1))
+            echo "next_attempt=${NEXT_ATTEMPT}" >> $GITHUB_OUTPUT
+            if [[ ${NEXT_ATTEMPT} -gt ${{ inputs.max_attempts }} ]]; then
+              echo "Max attempts reached"
+              exit 1
+            fi
+          env:
+            CURRENT_ATTEMPT: ${{ inputs.attempt }}
+
+        - name: Trigger next attempt
+          if: ${{ steps.check_interruption.outputs.was_interrupted == 'true' }}
+          uses: benc-uk/workflow-dispatch@v1
+          with:
+            workflow: training-with-retry.yaml
+            token: ${{ secrets.GITHUB_TOKEN }}
+            inputs: |
+              {
+                "attempt": "${{ steps.next-attempt.outputs.next_attempt }}",
+                "max_attempts": "${{ inputs.max_attempts }}",
+                "max_seq_length": "${{ inputs.max_seq_length }}",
+                "lora_rank": "${{ inputs.lora_rank }}",
+                "max_steps": "${{ inputs.max_steps }}",
+                "gpu_memory_utilization": "${{ inputs.gpu_memory_utilization }}",
+                "learning_rate": "${{ inputs.learning_rate }}",
+                "per_device_train_batch_size": "${{ inputs.per_device_train_batch_size }}",
+                "hf_repo": "${{ inputs.hf_repo }}"
+              }
