@@ -1,0 +1,14 @@
+name: GPU Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-gpu:
+    runs-on: machine/gpu=t4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check GPU
+        run: nvidia-smi
